@@ -8,7 +8,7 @@ class ArbitratorInfoCollector:
     def __init__(self, api_key=None):
         """Initialize the information collector with OpenAI API key."""
         # Use provided API key or get from environment variable
-        self.api_key = api_key or os.environ.get("OPENAI_API_KEY")
+        self.api_key = ""
         if not self.api_key:
             raise ValueError("OpenAI API key is required. Either pass it directly or set OPENAI_API_KEY environment variable.")
         
@@ -90,7 +90,7 @@ class ArbitratorInfoCollector:
         try:
             # Call the OpenAI API with higher token limit for more detailed response
             response = self.client.chat.completions.create(
-                model="gpt-4-turbo-preview",  # Using a capable model for analysis
+                model="gpt-4o-mini",  # Using a capable model for analysis
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_message}
@@ -297,30 +297,14 @@ class ArbitratorInfoCollector:
 if __name__ == "__main__":
     # Example arbitrator data - can be minimal or extensive as available
     arbitrator_data = {
-        "name": "Jane Smith",
-        "title": "Senior Arbitrator",
-        "organization": "International Arbitration Center",
-        "specialization": "Commercial Disputes",
-        "previous_firms": ["Smith & Partners LLP", "Global Law Associates"],
-        "education": ["Harvard Law School", "Yale University"],
-        "notable_cases": [
-            {"case": "TechCorp v. InnovateInc", "year": 2018, "outcome": "Ruled in favor of TechCorp"},
-            {"case": "Energy Solutions v. PowerGrid", "year": 2020, "outcome": "Settled"}
-        ],
-        "publications": [
-            "The Future of Commercial Arbitration (2019)",
-            "Ethical Considerations in International Disputes (2021)"
-        ]
+        "name": "Charles Poncet",
+        "title": "Arbitrator",
+        "location": "Switzerland"
     }
     
     # Example list of entities to check for connections
     entities_list = [
-        "TechCorp International",
-        "Global Energy Holdings",
-        "Investment Partners LLC",
-        "John Doe (CEO of InnovateInc)",
-        "University Research Foundation",
-        "International Trade Commission"
+            
     ]
     
     # Initialize the collector
