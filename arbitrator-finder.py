@@ -2,7 +2,7 @@
 """
 Arbitrator Case Finder - Search for arbitrators and their cases in ICSID & PCA API
 
-This script allows users to search for arbitrators by name and find all cases they were involved in.
+This script allows users to search for arbitrators by name and find the first 10 cases they were involved in.
 """
 
 import requests
@@ -14,7 +14,7 @@ import locale
 
 def search_arbitrator_cases(api_key, name, output_file=None):
     """
-    Search for an arbitrator by name and find all their cases.
+    Search for an arbitrator by name and find up to 10 of their cases.
     
     Args:
         api_key (str): API key for authentication
@@ -73,15 +73,16 @@ def search_arbitrator_cases(api_key, name, output_file=None):
             print(f"No individuals found matching '{name}'")
             return
             
-        # Step 2: For each individual, find all decisions they're involved in
+        # Step 2: For each individual, find up to 10 decisions they're involved in
         for individual_id, individual in individuals.items():
             print(f"\nFinding cases for: {individual['name']} (ID: {individual_id})")
             
-            # Get all decisions (paginated)
+            # Get decisions (paginated)
             page = 1
             case_ids = set()  # Use set to avoid duplicates
+            max_cases = 10    # Limit to 10 cases per arbitrator
             
-            while True:
+            while len(case_ids) < max_cases:
                 decisions_url = f"{base_url}/decisions"
                 params = {
                     "search": individual["name"],
@@ -106,18 +107,22 @@ def search_arbitrator_cases(api_key, name, output_file=None):
                 if "included" in decisions_data:
                     for item in decisions_data["included"]:
                         if item["type"] == "cases":
-                            print(item["id"])
                             case_ids.add(item["id"])
+
+                            print(f"Found case: {item['id']}", flush=True)
+
+                            # Break once we have 10 cases
+                            if len(case_ids) >= max_cases:
+                                break
                 
-                # Check if there are more pages
-                meta = decisions_data.get("meta", {})
-                if page >= meta.get("totalPages", 0):
+                # Check if we have enough cases or if there are more pages
+                if len(case_ids) >= max_cases or page >= decisions_data.get("meta", {}).get("totalPages", 0):
                     break
                     
                 page += 1
             
-            # Step 3: Get details for each case
-            for case_id in case_ids:
+            # Step 3: Get details for each case (limited to 10)
+            for i, case_id in enumerate(list(case_ids)[:max_cases]):
                 case_url = f"{base_url}/cases/{case_id}"
                 case_response = requests.get(case_url, headers=headers)
                 
@@ -151,7 +156,7 @@ def search_arbitrator_cases(api_key, name, output_file=None):
             # Display cases
             cases = individual.get("cases", [])
             if cases:
-                print(f"\nInvolved in {len(cases)} case(s):")
+                print(f"\nInvolved in {len(cases)} case(s) (Limited to first 10):")
                 for i, case in enumerate(cases, 1):
                     print(f"\nCase {i}:")
                     print(f"  Title: {case['title']}")
