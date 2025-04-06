@@ -66,11 +66,15 @@ def main():
             decision_individuals = get_decision_individuals(base_url, headers, decision_id)
             individuals.extend(decision_individuals)
         
-        # Format data according to the example structure
-        result = format_case_data(case, case_parties, case_decisions, individuals)
-        
         # Print formatted result
-        print(json.dumps(result, indent=2))
+        print("case:")
+        print(json.dumps(case))
+        print("case_parties:")
+        print(json.dumps(case_parties))
+        print("case_decisions:")
+        print(json.dumps(case_decisions))
+        print("individuals:")
+        print(json.dumps(individuals))
         
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
@@ -129,57 +133,6 @@ def get_decision_individuals(base_url: str, headers: Dict[str, str], decision_id
     except Exception as e:
         print(f"Warning: Could not fetch individuals for decision {decision_id}: {e}", file=sys.stderr)
         return []
-
-def format_case_data(
-    case: Dict[str, Any],
-    parties: List[Dict[str, Any]],
-    decisions: List[Dict[str, Any]],
-    individuals: List[Dict[str, Any]]
-) -> Dict[str, Any]:
-    """Format case data according to the example structure."""
-    # Find arbitrator (if any)
-    arbitrator = find_arbitrator(individuals)
-    
-    # Find parties by role
-    claimant = find_party_by_role(parties, "claimant")
-    respondent = find_party_by_role(parties, "respondent")
-    funder = find_party_by_role(parties, "funder") or find_party_by_role(parties, "third-party")
-    
-    # Build the result structure
-    result = {
-        "arbitrator": {
-            "name": get_attribute(arbitrator, "name", "Maria González"),
-            "current_firm": get_attribute(arbitrator, "firm", "González & Partners"),
-            "past_affiliations": ["Freshfields", "White & Case"],
-            "board_roles": ["ArbIntel Foundation"],
-            "known_associates": ["James Lee", "Sofia Andersson"],
-            "public_positions": ["Pro-investor bias in crypto disputes"],
-            "financial_interests": {
-                "stocks": ["Shell", "Amazon"],
-                "holdings": ["Litigation Funding Corp"]
-            }
-        },
-        "case_entities": {
-            "claimant": {
-                "name": get_attribute(claimant, "name", "EcoMining Ltd"),
-                "law_firm": "Freshfields",
-                "lead_counsel": "James Lee",
-                "parent_company": "GreenEarth Holdings"
-            },
-            "respondent": {
-                "name": get_attribute(respondent, "name", "Andes Republic"),
-                "law_firm": "White & Case",
-                "lead_counsel": "Sofia Andersson",
-                "expert_witness": "Dr. Elaine Zhu"
-            },
-            "funder": {
-                "name": get_attribute(funder, "name", "Litigation Funding Corp"),
-                "role": "Claimant funder"
-            }
-        }
-    }
-    
-    return result
 
 def find_arbitrator(individuals: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     """Find an arbitrator among individuals."""
