@@ -2,7 +2,7 @@
 """
 Arbitrator Case Finder - Search for arbitrators and their cases in ICSID & PCA API
 
-This script allows users to search for arbitrators by name and find the first 10 cases they were involved in.
+This script allows users to search for arbitrators by name and find a specified number of cases they were involved in.
 """
 
 import requests
@@ -12,13 +12,14 @@ import json
 import io
 import locale
 
-def search_arbitrator_cases(api_key, name, output_file=None):
+def search_arbitrator_cases(api_key, name, max_cases=10, output_file=None):
     """
-    Search for an arbitrator by name and find up to 10 of their cases.
+    Search for an arbitrator by name and find up to the specified number of their cases.
     
     Args:
         api_key (str): API key for authentication
         name (str): Name of the arbitrator to search for
+        max_cases (int, optional): Maximum number of cases to retrieve per arbitrator (default: 10)
         output_file (str, optional): File to save results in JSON format
     """
     base_url = "https://api.jusmundi.com/stanford"
@@ -80,7 +81,6 @@ def search_arbitrator_cases(api_key, name, output_file=None):
             # Get decisions (paginated)
             page = 1
             case_ids = set()  # Use set to avoid duplicates
-            max_cases = 10    # Limit to 10 cases per arbitrator
             
             while len(case_ids) < max_cases:
                 decisions_url = f"{base_url}/decisions"
@@ -108,9 +108,7 @@ def search_arbitrator_cases(api_key, name, output_file=None):
                     for item in decisions_data["included"]:
                         if item["type"] == "cases":
                             case_ids.add(item["id"])
-
-                            print(f"Found case: {item['id']}", flush=True)
-
+                            print(f"Found case: {item['id']}")
                             # Break once we have 10 cases
                             if len(case_ids) >= max_cases:
                                 break
@@ -156,7 +154,7 @@ def search_arbitrator_cases(api_key, name, output_file=None):
             # Display cases
             cases = individual.get("cases", [])
             if cases:
-                print(f"\nInvolved in {len(cases)} case(s) (Limited to first 10):")
+                print(f"\nInvolved in {len(cases)} case(s) (Limited to first {max_cases}):")
                 for i, case in enumerate(cases, 1):
                     print(f"\nCase {i}:")
                     print(f"  Title: {case['title']}")
@@ -194,11 +192,12 @@ def main():
     parser = argparse.ArgumentParser(description="Search for arbitrators and their cases in ICSID & PCA API")
     parser.add_argument("--api-key", required=True, help="API Key for authentication")
     parser.add_argument("--name", required=True, help="Name of the arbitrator to search for")
+    parser.add_argument("--max-cases", type=int, default=10, help="Maximum number of cases to retrieve per arbitrator (default: 10)")
     parser.add_argument("--output", help="Output file to save results (JSON format)")
     
     args = parser.parse_args()
     
-    search_arbitrator_cases(args.api_key, args.name, args.output)
+    search_arbitrator_cases(args.api_key, args.name, args.max_cases, args.output)
 
 if __name__ == "__main__":
     main()
