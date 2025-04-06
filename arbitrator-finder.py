@@ -122,11 +122,29 @@ def search_arbitrator_cases(api_key, name, max_cases=10, output_file=None):
             # Step 3: Get details for each case (limited to 10)
             for i, case_id in enumerate(list(case_ids)[:max_cases]):
                 case_url = f"{base_url}/cases/{case_id}"
-                case_response = requests.get(case_url, headers=headers)
+                params = {
+                    "include": "parties"  # Include parties in the response
+                }
+                case_response = requests.get(case_url, headers=headers, params=params)
                 
                 if case_response.status_code == 200:
                     case_data = case_response.json().get("data", {})
                     case_attributes = case_data.get("attributes", {})
+                    
+                    # Extract parties information
+                    parties = []
+                    if "included" in case_response.json():
+                        for item in case_response.json()["included"]:
+                            if item["type"] == "parties":
+                                party_attributes = item.get("attributes", {})
+                                party_name = party_attributes.get("name", "Unnamed Party")
+                                party_role = party_attributes.get("role", "Unknown Role")
+                                party_type = party_attributes.get("type", "Unknown Type")
+                                parties.append({
+                                    "name": party_name,
+                                    "role": party_role,
+                                    "type": party_type
+                                })
                     
                     individual["cases"].append({
                         "id": case_id,
@@ -135,7 +153,8 @@ def search_arbitrator_cases(api_key, name, max_cases=10, output_file=None):
                         "status": case_attributes.get("status", ""),
                         "startDate": case_attributes.get("startDate", ""),
                         "endDate": case_attributes.get("endDate", ""),
-                        "organization": case_attributes.get("organization", "")
+                        "organization": case_attributes.get("organization", ""),
+                        "parties": parties
                     })
         
         # Step 4: Display and return results
@@ -147,8 +166,16 @@ def search_arbitrator_cases(api_key, name, max_cases=10, output_file=None):
             # Display individual details
             if individual['details']:
                 print("Details:")
+                
+                # Check for specific important fields first
+                important_fields = ["firm", "company", "organization", "nationality", "role", "type"]
+                for field in important_fields:
+                    if field in individual['details'] and individual['details'][field]:
+                        print(f"  {field.capitalize()}: {individual['details'][field]}")
+                
+                # Then display any other details
                 for key, value in individual['details'].items():
-                    if value:  # Only show non-empty values
+                    if value and key not in important_fields:  # Only show non-empty values that weren't already displayed
                         print(f"  {key}: {value}")
             
             # Display cases
@@ -169,6 +196,14 @@ def search_arbitrator_cases(api_key, name, max_cases=10, output_file=None):
                         print(f"  Start Date: {case['startDate']}")
                     if case["endDate"]:
                         print(f"  End Date: {case['endDate']}")
+                    
+                    # Display parties information
+                    if case["parties"]:
+                        print(f"  Parties involved:")
+                        for party in case["parties"]:
+                            print(f"    - {party['name']} ({party['role']}, {party['type']})")
+                    else:
+                        print("  Parties: No party information available")
             else:
                 print("\nNo cases found for this individual")
             
