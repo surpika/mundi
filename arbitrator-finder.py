@@ -1,22 +1,24 @@
 #!/usr/bin/env python3
 """
-Individual Finder - Search for individuals by name in ICSID & PCA cases API
+Arbitrator Case Finder - Search for arbitrators and their cases in ICSID & PCA API
 
-This script allows users to search for individuals by name directly.
+This script allows users to search for arbitrators by name and find all cases they were involved in.
 """
 
 import requests
 import argparse
 import sys
 import json
+import io
+import locale
 
-def search_individual(api_key, name, output_file=None):
+def search_arbitrator_cases(api_key, name, output_file=None):
     """
-    Search for an individual by name in the ICSID & PCA Cases API.
+    Search for an arbitrator by name and find all their cases.
     
     Args:
         api_key (str): API key for authentication
-        name (str): Name of the individual to search for
+        name (str): Name of the arbitrator to search for
         output_file (str, optional): File to save results in JSON format
     """
     base_url = "https://api.jusmundi.com/stanford"
@@ -27,7 +29,7 @@ def search_individual(api_key, name, output_file=None):
     
     print(f"Searching for individual: '{name}'")
     
-    # Search for decisions with individuals matching the name
+    # Step 1: Search for decisions with individuals matching the name
     search_url = f"{base_url}/decisions"
     params = {
         "search": name,
@@ -38,11 +40,12 @@ def search_individual(api_key, name, output_file=None):
     }
     
     try:
+        # Find matching individuals
         response = requests.get(search_url, headers=headers, params=params)
         response.raise_for_status()
         search_data = response.json()
         
-        # Extract unique individuals from included data
+        # Extract individuals matching the name
         individuals = {}
         
         if "included" in search_data:
@@ -62,49 +65,135 @@ def search_individual(api_key, name, output_file=None):
                             individuals[individual_id] = {
                                 "id": individual_id,
                                 "name": individual_name,
-                                "details": individual_data.get("data", {}).get("attributes", {})
+                                "details": individual_data.get("data", {}).get("attributes", {}),
+                                "cases": []
                             }
         
-        # Display and return results
-        if individuals:
-            print(f"\nFound {len(individuals)} individual(s) matching '{name}':\n")
-            
-            for idx, (_, individual) in enumerate(individuals.items(), 1):
-                print(f"Individual {idx}:")
-                print(f"ID: {individual['id']}")
-                print(f"Name: {individual['name']}")
-                
-                # Display additional details
-                if individual['details']:
-                    print("Details:")
-                    for key, value in individual['details'].items():
-                        if value:  # Only show non-empty values
-                            print(f"  {key}: {value}")
-                
-                print("-" * 50)
-            
-            # Save to file if requested
-            if output_file:
-                with open(output_file, 'w') as f:
-                    json.dump(list(individuals.values()), f, indent=2)
-                print(f"Results saved to {output_file}")
-                
-        else:
+        if not individuals:
             print(f"No individuals found matching '{name}'")
+            return
+            
+        # Step 2: For each individual, find all decisions they're involved in
+        for individual_id, individual in individuals.items():
+            print(f"\nFinding cases for: {individual['name']} (ID: {individual_id})")
+            
+            # Get all decisions (paginated)
+            page = 1
+            case_ids = set()  # Use set to avoid duplicates
+            
+            while True:
+                decisions_url = f"{base_url}/decisions"
+                params = {
+                    "search": individual["name"],
+                    "fields": "individuals.name",
+                    "include": "cases",  # Include case information
+                    "page": page,
+                    "count": 10
+                }
+                
+                decisions_response = requests.get(decisions_url, headers=headers, params=params)
+                
+                if decisions_response.status_code != 200:
+                    break
+                    
+                decisions_data = decisions_response.json()
+                decisions = decisions_data.get("data", [])
+                
+                if not decisions:
+                    break
+                
+                # Extract case IDs from included data
+                if "included" in decisions_data:
+                    for item in decisions_data["included"]:
+                        if item["type"] == "cases":
+                            print(item["id"])
+                            case_ids.add(item["id"])
+                
+                # Check if there are more pages
+                meta = decisions_data.get("meta", {})
+                if page >= meta.get("totalPages", 0):
+                    break
+                    
+                page += 1
+            
+            # Step 3: Get details for each case
+            for case_id in case_ids:
+                case_url = f"{base_url}/cases/{case_id}"
+                case_response = requests.get(case_url, headers=headers)
+                
+                if case_response.status_code == 200:
+                    case_data = case_response.json().get("data", {})
+                    case_attributes = case_data.get("attributes", {})
+                    
+                    individual["cases"].append({
+                        "id": case_id,
+                        "title": case_attributes.get("title", "Untitled Case"),
+                        "reference": case_attributes.get("reference", ""),
+                        "status": case_attributes.get("status", ""),
+                        "startDate": case_attributes.get("startDate", ""),
+                        "endDate": case_attributes.get("endDate", ""),
+                        "organization": case_attributes.get("organization", "")
+                    })
+        
+        # Step 4: Display and return results
+        for idx, (_, individual) in enumerate(individuals.items(), 1):
+            print(f"\nArbitrator {idx}:")
+            print(f"ID: {individual['id']}")
+            print(f"Name: {individual['name']}")
+            
+            # Display individual details
+            if individual['details']:
+                print("Details:")
+                for key, value in individual['details'].items():
+                    if value:  # Only show non-empty values
+                        print(f"  {key}: {value}")
+            
+            # Display cases
+            cases = individual.get("cases", [])
+            if cases:
+                print(f"\nInvolved in {len(cases)} case(s):")
+                for i, case in enumerate(cases, 1):
+                    print(f"\nCase {i}:")
+                    print(f"  Title: {case['title']}")
+                    print(f"  ID: {case['id']}")
+                    if case["reference"]:
+                        print(f"  Reference: {case['reference']}")
+                    if case["organization"]:
+                        print(f"  Organization: {case['organization']}")
+                    if case["status"]:
+                        print(f"  Status: {case['status']}")
+                    if case["startDate"]:
+                        print(f"  Start Date: {case['startDate']}")
+                    if case["endDate"]:
+                        print(f"  End Date: {case['endDate']}")
+            else:
+                print("\nNo cases found for this individual")
+            
+            print("-" * 60)
+        
+        # Save to file if requested
+        if output_file:
+            with open(output_file, 'w') as f:
+                json.dump(list(individuals.values()), f, indent=2)
+            print(f"Results saved to {output_file}")
             
     except requests.RequestException as e:
         print(f"Error: {str(e)}")
         sys.exit(1)
 
 def main():
-    parser = argparse.ArgumentParser(description="Search for an individual by name in ICSID & PCA cases")
+    # Fix potential encoding issues by setting stdout to use UTF-8
+    # This handles special characters in names and text content
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    
+    parser = argparse.ArgumentParser(description="Search for arbitrators and their cases in ICSID & PCA API")
     parser.add_argument("--api-key", required=True, help="API Key for authentication")
-    parser.add_argument("--name", required=True, help="Name of the individual to search for")
+    parser.add_argument("--name", required=True, help="Name of the arbitrator to search for")
     parser.add_argument("--output", help="Output file to save results (JSON format)")
     
     args = parser.parse_args()
     
-    search_individual(args.api_key, args.name, args.output)
+    search_arbitrator_cases(args.api_key, args.name, args.output)
 
 if __name__ == "__main__":
     main()
