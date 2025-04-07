@@ -5,31 +5,99 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Arbitrator Investigation Tool</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .loading-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.9);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+        .arbitrator-card {
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .arbitrator-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        .arbitrator-card.selected {
+            border-color: #3b82f6;
+            background-color: #eff6ff;
+        }
+    </style>
 </head>
 <body class="bg-gray-100">
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-spinner mb-4"></div>
+        <p class="text-lg font-semibold text-gray-700">Searching for conflicts...</p>
+        <p class="text-sm text-gray-500 mt-2">This may take several minutes</p>
+        <div id="searchProgress" class="mt-4 text-sm text-gray-600"></div>
+    </div>
+
     <div class="container mx-auto px-4 py-8">
         <h1 class="text-3xl font-bold text-gray-800 mb-8">Arbitrator Investigation Tool</h1>
         
         <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <!-- Arbitrator List -->
-            <div class="bg-white rounded-lg shadow p-6">
-                <h2 class="text-xl font-semibold mb-4">Available Arbitrators</h2>
+            <!-- Arbitrator Selection -->
+            <div>
+                <h2 class="text-xl font-semibold mb-6">Select an Arbitrator</h2>
                 <div id="arbitratorList" class="space-y-4">
                     <!-- Arbitrators will be populated here -->
                 </div>
             </div>
 
-            <!-- Selected Arbitrator Details -->
-            <div class="bg-white rounded-lg shadow p-6">
-                <h2 class="text-xl font-semibold mb-4">Arbitrator Details</h2>
-                <div id="arbitratorDetails" class="space-y-4">
-                    <p class="text-gray-600">Select an arbitrator to view their details.</p>
+            <!-- Search Controls -->
+            <div>
+                <div id="searchControlsCard" class="bg-white rounded-lg shadow p-6">
+                    <h2 class="text-xl font-semibold mb-4">Conflict Search</h2>
+                    <div id="arbitratorDetails" class="mb-6 text-sm hidden">
+                        <!-- Selected arbitrator details will appear here -->
+                    </div>
+                    <div id="searchControls" class="space-y-4">
+                        <p class="text-gray-600 text-sm mb-4">Select an arbitrator from the list to begin the search process.</p>
+                        <button id="searchButton" 
+                                onclick="startConflictSearch()"
+                                class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition duration-200 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                                disabled>
+                            Search Conflicts
+                        </button>
+                    </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- Search Results (Initially Hidden) -->
+        <div id="searchResultsCard" class="hidden mt-8 bg-white rounded-lg shadow p-6">
+            <h2 class="text-xl font-semibold mb-4">Search Results</h2>
+            <div id="searchResults" class="space-y-6">
+                <!-- Results will be populated here -->
             </div>
         </div>
     </div>
 
     <script>
+        let selectedArbitrator = null;
+
         // Fetch arbitrators from the API
         async function fetchArbitrators() {
             const response = await fetch('/api/arbitrators');
@@ -41,25 +109,159 @@
         function displayArbitrators(arbitrators) {
             const list = document.getElementById('arbitratorList');
             list.innerHTML = arbitrators.map(arbitrator => `
-                <div class="p-4 border rounded-lg hover:bg-gray-50 cursor-pointer transition"
-                     onclick="showArbitratorDetails(${JSON.stringify(arbitrator).replace(/"/g, '&quot;')})">
-                    <h3 class="font-semibold text-lg">${arbitrator.name}</h3>
-                    <p class="text-gray-600">${arbitrator.specialization}</p>
+                <div class="arbitrator-card bg-white rounded-lg shadow p-4 border-2 border-transparent"
+                     onclick="selectArbitrator(${JSON.stringify(arbitrator).replace(/"/g, '&quot;')})">
+                    <h3 class="font-semibold text-lg mb-2">${arbitrator.name}</h3>
+                    <p class="text-gray-600 text-sm">${arbitrator.specialization}</p>
+                    <div class="mt-2 text-sm text-gray-500">
+                        <span class="inline-block mr-4">${arbitrator.experience_years} years experience</span>
+                        <span>${arbitrator.cases_handled} cases handled</span>
+                    </div>
                 </div>
             `).join('');
         }
 
-        // Display selected arbitrator details
-        function showArbitratorDetails(arbitrator) {
+        // Select an arbitrator
+        function selectArbitrator(arbitrator) {
+            selectedArbitrator = arbitrator;
+            
+            // Update visual selection
+            document.querySelectorAll('.arbitrator-card').forEach(card => {
+                card.classList.remove('selected');
+                if (card.querySelector('h3').textContent === arbitrator.name) {
+                    card.classList.add('selected');
+                }
+            });
+
+            // Update details and enable search
             const details = document.getElementById('arbitratorDetails');
             details.innerHTML = `
-                <h3 class="font-semibold text-xl mb-4">${arbitrator.name}</h3>
-                <div class="space-y-2">
-                    <p><span class="font-medium">Specialization:</span> ${arbitrator.specialization}</p>
-                    <p><span class="font-medium">Years of Experience:</span> ${arbitrator.experience_years}</p>
-                    <p><span class="font-medium">Cases Handled:</span> ${arbitrator.cases_handled}</p>
+                <div class="p-4 bg-blue-50 rounded-lg">
+                    <p class="font-semibold mb-2">Selected: ${arbitrator.name}</p>
+                    <p class="text-sm text-gray-600">${arbitrator.specialization}</p>
                 </div>
             `;
+            details.classList.remove('hidden');
+            document.getElementById('searchButton').disabled = false;
+        }
+
+        // Start conflict search
+        async function startConflictSearch() {
+            if (!selectedArbitrator) return;
+
+            const overlay = document.getElementById('loadingOverlay');
+            const progress = document.getElementById('searchProgress');
+            
+            overlay.style.display = 'flex';
+            document.getElementById('searchButton').disabled = true;
+
+            try {
+                // Update progress messages
+                const steps = [
+                    'Connecting to JusMundi API...',
+                    'Searching ICSID database...',
+                    'Analyzing case records...',
+                    'Processing results...'
+                ];
+
+                for (let i = 0; i < steps.length; i++) {
+                    progress.textContent = steps[i];
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                }
+
+                const response = await fetch('/api/conflicts/' + selectedArbitrator.id);
+                const data = await response.json();
+                displaySearchResults(data);
+                
+            } catch (error) {
+                displaySearchResults({
+                    status: 'error',
+                    message: 'Failed to complete the search. Please try again.'
+                });
+            } finally {
+                overlay.style.display = 'none';
+                document.getElementById('searchButton').disabled = false;
+            }
+        }
+
+        // Display search results
+        function displaySearchResults(data) {
+            const resultsCard = document.getElementById('searchResultsCard');
+            const resultsDiv = document.getElementById('searchResults');
+            
+            if (data.status === 'error') {
+                resultsDiv.innerHTML = `
+                    <div class="p-4 bg-red-50 text-red-700 rounded-lg">
+                        Error: ${data.message}
+                    </div>
+                `;
+            } else if (data.status === 'no_results') {
+                resultsDiv.innerHTML = `
+                    <div class="p-4 bg-yellow-50 text-yellow-700 rounded-lg">
+                        ${data.message}
+                    </div>
+                `;
+            } else {
+                let resultsHtml = '';
+                
+                data.results.forEach((result, idx) => {
+                    resultsHtml += `
+                        <div class="border-b pb-6 last:border-b-0">
+                            <h3 class="text-lg font-semibold mb-4">${result.name}</h3>
+                            
+                            <!-- Details Section -->
+                            <div class="mb-4">
+                                <h4 class="font-medium text-gray-700 mb-2">Details</h4>
+                                <div class="grid grid-cols-2 gap-2 text-sm">
+                                    ${Object.entries(result.details)
+                                        .filter(([_, value]) => value)
+                                        .map(([key, value]) => `
+                                            <p class="text-gray-600">${key}:</p>
+                                            <p>${value}</p>
+                                        `).join('')}
+                                </div>
+                            </div>
+
+                            <!-- Cases Section -->
+                            <div>
+                                <h4 class="font-medium text-gray-700 mb-2">Cases (${result.cases.length})</h4>
+                                <div class="space-y-4">
+                                    ${result.cases.map(caseData => `
+                                        <div class="bg-gray-50 p-4 rounded-lg">
+                                            <h5 class="font-medium mb-2">${caseData.title}</h5>
+                                            <div class="grid grid-cols-2 gap-2 text-sm">
+                                                <p class="text-gray-600">Reference:</p>
+                                                <p>${caseData.reference || 'N/A'}</p>
+                                                <p class="text-gray-600">Organization:</p>
+                                                <p>${caseData.organization || 'N/A'}</p>
+                                                <p class="text-gray-600">Status:</p>
+                                                <p>${caseData.status || 'N/A'}</p>
+                                                <p class="text-gray-600">Dates:</p>
+                                                <p>${caseData.dates || 'N/A'}</p>
+                                            </div>
+                                            ${caseData.parties.length ? `
+                                                <div class="mt-2">
+                                                    <p class="text-gray-600 mb-1">Parties:</p>
+                                                    <ul class="list-disc list-inside text-sm">
+                                                        ${caseData.parties.map(party => `
+                                                            <li>${party}</li>
+                                                        `).join('')}
+                                                    </ul>
+                                                </div>
+                                            ` : ''}
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                resultsDiv.innerHTML = resultsHtml;
+            }
+
+            // Show results
+            resultsCard.classList.remove('hidden');
         }
 
         // Load arbitrators when the page loads
