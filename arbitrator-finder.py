@@ -11,6 +11,12 @@ import sys
 import json
 import io
 import locale
+from supabase import create_client, Client
+import supabase
+from llama_cloud_services import LlamaParse
+import time
+from llama_index.core import SimpleDirectoryReader
+from openai import OpenAI
 
 def search_arbitrator_cases(api_key, name, max_cases=10, output_file=None):
     """
@@ -21,21 +27,25 @@ def search_arbitrator_cases(api_key, name, max_cases=10, output_file=None):
         name (str): Name of the arbitrator to search for
         max_cases (int, optional): Maximum number of cases to retrieve per arbitrator (default: 10)
         output_file (str, optional): File to save results in JSON format
+        
+    Returns:
+        str: Result string containing all output
     """
+    result = ""  # Initialize result string
     base_url = "https://api.jusmundi.com/stanford"
     headers = {
         "X-API-Key": api_key,
         "Accept": "application/json"
     }
     
-    print(f"Searching for individual: '{name}'")
+    result += f"Searching for individual: '{name}'\n"
     
     # Step 1: Search for decisions with individuals matching the name
     search_url = f"{base_url}/decisions"
     params = {
         "search": name,
         "fields": "individuals.name",  # Focus search on individual names
-        "count": 10,
+        "count": 1,
         "page": 1,
         "include": "individuals"  # Include individuals in the response
     }
@@ -45,6 +55,9 @@ def search_arbitrator_cases(api_key, name, max_cases=10, output_file=None):
         response = requests.get(search_url, headers=headers, params=params)
         response.raise_for_status()
         search_data = response.json()
+
+        result += "search_data:\n"
+        result += f"{search_data}\n\n"
         
         # Extract individuals matching the name
         individuals = {}
@@ -71,12 +84,12 @@ def search_arbitrator_cases(api_key, name, max_cases=10, output_file=None):
                             }
         
         if not individuals:
-            print(f"No individuals found matching '{name}'")
-            return
+            #result += f"No individuals found matching '{name}'\n"
+            return result
             
         # Step 2: For each individual, find up to 10 decisions they're involved in
         for individual_id, individual in individuals.items():
-            print(f"\nFinding cases for: {individual['name']} (ID: {individual_id})")
+            #result += f"\nFinding cases for: {individual['name']} (ID: {individual_id})\n"
             
             # Get decisions (paginated)
             page = 1
@@ -89,7 +102,7 @@ def search_arbitrator_cases(api_key, name, max_cases=10, output_file=None):
                     "fields": "individuals.name",
                     "include": "cases",  # Include case information
                     "page": page,
-                    "count": 10
+                    "count": 3
                 }
                 
                 decisions_response = requests.get(decisions_url, headers=headers, params=params)
@@ -108,7 +121,7 @@ def search_arbitrator_cases(api_key, name, max_cases=10, output_file=None):
                     for item in decisions_data["included"]:
                         if item["type"] == "cases":
                             case_ids.add(item["id"])
-                            print(f"Found case: {item['id']}")
+                            #result += f"Found case: {item['id']}\n"
                             # Break once we have 10 cases
                             if len(case_ids) >= max_cases:
                                 break
@@ -159,67 +172,72 @@ def search_arbitrator_cases(api_key, name, max_cases=10, output_file=None):
         
         # Step 4: Display and return results
         for idx, (_, individual) in enumerate(individuals.items(), 1):
-            print(f"\nArbitrator {idx}:")
-            print(f"ID: {individual['id']}")
-            print(f"Name: {individual['name']}")
+            result += f"\nArbitrator {idx}:\n"
+            result += f"ID: {individual['id']}\n"
+            result += f"Name: {individual['name']}\n"
             
             # Display individual details
             if individual['details']:
-                print("Details:")
+                result += "Details:\n"
                 
                 # Check for specific important fields first
                 important_fields = ["firm", "company", "organization", "nationality", "role", "type"]
                 for field in important_fields:
                     if field in individual['details'] and individual['details'][field]:
-                        print(f"  {field.capitalize()}: {individual['details'][field]}")
+                        result += f"  {field.capitalize()}: {individual['details'][field]}\n"
                 
                 # Then display any other details
                 for key, value in individual['details'].items():
                     if value and key not in important_fields:  # Only show non-empty values that weren't already displayed
-                        print(f"  {key}: {value}")
+                        result += f"  {key}: {value}\n"
             
             # Display cases
             cases = individual.get("cases", [])
             if cases:
-                print(f"\nInvolved in {len(cases)} case(s) (Limited to first {max_cases}):")
+                #result += f"\nInvolved in {len(cases)} case(s) (Limited to first {max_cases}):\n"
                 for i, case in enumerate(cases, 1):
-                    print(f"\nCase {i}:")
-                    print(f"  Title: {case['title']}")
-                    print(f"  ID: {case['id']}")
+                    result += f"\nCase {i}:\n"
+                    result += f"  Title: {case['title']}\n"
+                    result += f"  ID: {case['id']}\n"
                     if case["reference"]:
-                        print(f"  Reference: {case['reference']}")
+                        result += f"  Reference: {case['reference']}\n"
                     if case["organization"]:
-                        print(f"  Organization: {case['organization']}")
+                        pass
+                        #result += f"  Organization: {case['organization']}\n"
                     if case["status"]:
-                        print(f"  Status: {case['status']}")
+                        result += f"  Status: {case['status']}\n"
                     if case["startDate"]:
-                        print(f"  Start Date: {case['startDate']}")
+                        pass
+                        #result += f"  Start Date: {case['startDate']}\n"
                     if case["endDate"]:
-                        print(f"  End Date: {case['endDate']}")
+                        pass
+                        #result += f"  End Date: {case['endDate']}\n"
                     
                     # Display parties information
                     if case["parties"]:
-                        print(f"  Parties involved:")
+                        result += f"  Parties involved:\n"
                         for party in case["parties"]:
-                            print(f"    - {party['name']} ({party['role']}, {party['type']})")
+                            result += f"    - {party['name']} ({party['role']}, {party['type']})\n"
                     else:
-                        print("  Parties: No party information available")
+                        pass
+                        #result += "  Parties: No party information available\n"
             else:
-                print("\nNo cases found for this individual")
+                pass
+                #result += "\nNo cases found for this individual\n"
             
-            print("-" * 60)
+            #result += "-" * 60 + "\n"
         
-        # Save to file if requested
-        if output_file:
-            with open(output_file, 'w') as f:
-                json.dump(list(individuals.values()), f, indent=2)
-            print(f"Results saved to {output_file}")
+        
             
     except requests.RequestException as e:
-        print(f"Error: {str(e)}")
+        result += f"Error: {str(e)}\n"
         sys.exit(1)
+    
+    return result
 
 def main():
+    result = ""
+
     # Fix potential encoding issues by setting stdout to use UTF-8
     # This handles special characters in names and text content
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
@@ -229,10 +247,90 @@ def main():
     parser.add_argument("--name", required=True, help="Name of the arbitrator to search for")
     parser.add_argument("--max-cases", type=int, default=10, help="Maximum number of cases to retrieve per arbitrator (default: 10)")
     parser.add_argument("--output", help="Output file to save results (JSON format)")
-    
+    parser.add_argument("--no-get")
+
     args = parser.parse_args()
     
-    search_arbitrator_cases(args.api_key, args.name, args.max_cases, args.output)
+    if(not args.no_get):
+        result = search_arbitrator_cases(args.api_key, args.name, args.max_cases, args.output)
+
+        #print(result)
+
+        file_path = 'output.txt'
+        print(len(result))
+        file = open(file_path, 'w')
+        file.write(result)
+        file.close()
+
+    result = ""
+    with open("output.txt", "r") as file:
+        for line in file:
+            result += line
+
+    # Path to your file
+    file_path = "output.txt"
+    print("Asking chat gippity")
+    system_prompt = "Be Concise. Using the international standard for arbitration conflicts of interest with the Kingdom of Norway, determine if there are any conflicts of interest and if there are classify them as RED GREEN or YELLOW and cite your sources"
+    client = OpenAI(api_key="")
+    detailed = False
+    response = client.chat.completions.create(
+                model="gpt-4o-mini",  # Using a capable model for analysis
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": result[:10000]}
+                ],
+                temperature=0.7,  # Higher temperature for more creative and comprehensive exploration
+                max_tokens=4000 if detailed else 1000  # Higher token limit for detailed responses
+    )
+    print(response.choices[0].message.content)
+
+    # # Send the request
+    # response = requests.post(
+    #     "https://api.cloud.llamaindex.ai/api/parsing/upload",
+    #     headers={
+    #         "accept": "application/json",
+    #         "Authorization": f"Bearer {LLAMA_CLOUD_API_KEY}"
+    #     },
+    #     files={
+    #         "file": open(file_path, "rb")
+    #     },
+    #     data={
+    #         "structured_output_json_schema": json.dumps(json_schema)
+    #     }
+    # )
+
+    # Get the parsed result
+    # parsed =  response.json()
+    # print(parsed)
+
+    # Get the job ID
+    # job_id = response.json()['id']
+    # print(f"Job submitted with ID: {job_id}")
+
+    # # Poll for results
+    # while True:
+    #     status_response = requests.get(
+    #         f"https://api.cloud.llamaindex.ai/api/parsing/{job_id}",
+    #         headers={"Authorization": f"Bearer {LLAMA_CLOUD_API_KEY}"}
+    #     )
+        
+    #     job_info = status_response.json()
+    #     status = job_info.get('status')
+        
+    #     print(f"Current status: {status}")
+        
+    #     if status == 'COMPLETED':
+    #         # Get the parsed results
+    #         parsed_data = job_info.get('result', {})
+    #         print("Parsing completed!")
+    #         print(json.dumps(parsed_data, indent=2))
+    #         break
+    #     elif status in ['FAILED', 'ERROR']:
+    #         print(f"Parsing failed: {job_info.get('error', 'Unknown error')}")
+    #         break
+        
+    #     # Wait a bit before checking again
+    #     time.sleep(2)
 
 if __name__ == "__main__":
     main()
