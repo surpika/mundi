@@ -25,19 +25,15 @@ wheels/
 .installed.cfg
 *.egg
 
-# SQLite database files
+# SQLite database
 *.db
-*.sqlite3
-*.sqlite
 
-# IDE specific files
-.idea/
+# IDE
 .vscode/
+.idea/
 *.swp
 *.swo
-.DS_Store
 
-# Environment variables
-.env
-.env.local
-.env.*.local 
+# OS
+.DS_Store
+Thumbs.db 
