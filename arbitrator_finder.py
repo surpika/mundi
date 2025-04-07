@@ -18,6 +18,48 @@ import time
 from llama_index.core import SimpleDirectoryReader
 from openai import OpenAI
 
+def get_mock_data(name):
+    """Return mock data for testing when no API key is provided"""
+    return [{
+        'id': '12345',
+        'name': name,
+        'details': {
+            'firm': 'International Arbitration Firm',
+            'nationality': 'Swiss',
+            'role': 'Arbitrator',
+            'type': 'Individual',
+            'experience': '25+ years in international arbitration'
+        },
+        'cases': [
+            {
+                'id': 'case001',
+                'title': 'Company A vs. State B',
+                'reference': 'ARB/21/123',
+                'status': 'Concluded',
+                'startDate': '2021-03-15',
+                'endDate': '2023-06-30',
+                'organization': 'ICSID',
+                'parties': [
+                    {'name': 'Company A', 'role': 'Claimant', 'type': 'Corporation'},
+                    {'name': 'State B', 'role': 'Respondent', 'type': 'State'}
+                ]
+            },
+            {
+                'id': 'case002',
+                'title': 'Investor C vs. State D',
+                'reference': 'PCA-2022-01',
+                'status': 'Ongoing',
+                'startDate': '2022-01-10',
+                'endDate': '',
+                'organization': 'PCA',
+                'parties': [
+                    {'name': 'Investor C', 'role': 'Claimant', 'type': 'Individual'},
+                    {'name': 'State D', 'role': 'Respondent', 'type': 'State'}
+                ]
+            }
+        ]
+    }]
+
 def search_arbitrator_cases(api_key, name, max_cases=10, output_file=None):
     """
     Search for an arbitrator by name and find up to the specified number of their cases.
@@ -31,7 +73,14 @@ def search_arbitrator_cases(api_key, name, max_cases=10, output_file=None):
     Returns:
         str: Result string containing all output
     """
+<<<<<<< HEAD:arbitrator-finder.py
     result = ""  # Initialize result string
+=======
+    # Return mock data if no API key is provided
+    if not api_key or api_key == "your_api_key_here":
+        return get_mock_data(name)
+
+>>>>>>> 372bdb64b2657d3b0191952ea9e52a19d0a2bc87:arbitrator_finder.py
     base_url = "https://api.jusmundi.com/stanford"
     headers = {
         "X-API-Key": api_key,
